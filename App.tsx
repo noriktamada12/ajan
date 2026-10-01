@@ -20,14 +20,15 @@ import type { NamaShalat, StatBulan } from './src/checklist';
 // Tahan splash native sampai React siap, biar tidak ada kedipan.
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
-const RED = '#B31217';
-const RED_LIGHT = '#C1272D';
-const DARK = '#2B0A0A';
-const BG = '#FFFFFF';
-const INK = '#111111';
-const MUT = '#8A8A8A';
-const CREAM = '#FFF5F3';
-const PINK_BG = '#FFF1F1';
+const RED = '#A63A2E';
+const RED_LIGHT = '#B34A3C';
+const DARK = '#2E1512';
+const BG = '#FAF7F2';
+const INK = '#231A16';
+const MUT = '#8C7B74';
+const CREAM = '#F4ECE3';
+const PINK_BG = '#F6E8E3';
+const LINE = '#E8DED2';
 
 type Layar = 'splash' | 'jadwal' | 'semua' | 'detail' | 'tentang' | 'profil' | 'checklist' | 'grafik';
 
@@ -66,6 +67,32 @@ const KAT_TANYA = 'tanyashalat';
 
 /** Jeda antara adzan dan notifikasi susulan tanya-jawab (menit). */
 const TANYA_SETELAH_MENIT = 30;
+
+/* ---------- TRANSISI LAYAR: fade + slide halus ---------- */
+function Masuk({ nama, children }: { nama: string; children: React.ReactNode }) {
+  const m = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    m.setValue(0);
+    Animated.timing(m, {
+      toValue: 1,
+      duration: 320,
+      easing: Easing.bezier(0.22, 1, 0.36, 1),
+      useNativeDriver: true,
+    }).start();
+  }, [m, nama]);
+  return (
+    <Animated.View
+      style={[
+        { flex: 1 },
+        {
+          opacity: m,
+          transform: [{ translateY: m.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) }],
+        },
+      ]}>
+      {children}
+    </Animated.View>
+  );
+}
 
 export default function App() {
   const [layar, setLayar] = useState<Layar>('splash');
@@ -327,59 +354,75 @@ export default function App() {
       <StatusBar style={layar === 'splash' ? 'light' : 'dark'} />
       {layar === 'splash' && <Splash onMulai={() => setLayar('jadwal')} />}
       {layar === 'jadwal' && (
-        <Jadwal
-          filter={filter}
-          setFilter={setFilter}
-          ingat={ingat}
-          jamOf={jamOf}
-          onBukaDetail={() => setLayar('detail')}
-          nav={setLayar}
-        />
+        <Masuk nama="jadwal">
+          <Jadwal
+            filter={filter}
+            setFilter={setFilter}
+            ingat={ingat}
+            jamOf={jamOf}
+            onBukaDetail={() => setLayar('detail')}
+            nav={setLayar}
+          />
+        </Masuk>
       )}
       {layar === 'detail' && (
-        <Detail
-          ingat={ingat}
-          toggleIngat={toggleIngat}
-          suaraCewe={suaraCewe}
-          gantiSuara={gantiSuara}
-          ubahJam={ubahJam}
-          jamOf={jamOf}
-          lagiPutar={lagiPutar}
-          putarAudio={putarAudio}
-          izinNotif={izinNotif}
-          sedangJadwal={sedangJadwal}
-          onKembali={() => setLayar('jadwal')}
-        />
+        <Masuk nama="detail">
+          <Detail
+            ingat={ingat}
+            toggleIngat={toggleIngat}
+            suaraCewe={suaraCewe}
+            gantiSuara={gantiSuara}
+            ubahJam={ubahJam}
+            jamOf={jamOf}
+            lagiPutar={lagiPutar}
+            putarAudio={putarAudio}
+            izinNotif={izinNotif}
+            sedangJadwal={sedangJadwal}
+            onKembali={() => setLayar('jadwal')}
+          />
+        </Masuk>
       )}
       {layar === 'semua' && (
-        <Semua
-          ingat={ingat}
-          jamOf={jamOf}
-          onBukaDetail={(nama) => setLayar('detail')}
-          onKembali={() => setLayar('jadwal')}
-          nav={setLayar}
-        />
+        <Masuk nama="semua">
+          <Semua
+            ingat={ingat}
+            jamOf={jamOf}
+            onBukaDetail={(nama) => setLayar('detail')}
+            onKembali={() => setLayar('jadwal')}
+            nav={setLayar}
+          />
+        </Masuk>
       )}
       {layar === 'checklist' && (
-        <Checklist
-          centang={centang}
-          onSentuh={sentuhHari}
-          segarkan={segarkanChecklist}
-          nav={setLayar}
-        />
+        <Masuk nama="checklist">
+          <Checklist
+            centang={centang}
+            onSentuh={sentuhHari}
+            segarkan={segarkanChecklist}
+            nav={setLayar}
+          />
+        </Masuk>
       )}
       {layar === 'grafik' && (
-        <Grafik stat={statBulan} nav={setLayar} />
+        <Masuk nama="grafik">
+          <Grafik stat={statBulan} nav={setLayar} />
+        </Masuk>
       )}
-      {layar === 'tentang' && <Tentang onKembali={() => setLayar('jadwal')} nav={setLayar} />}
+      {layar === 'tentang' && (
+        <Masuk nama="tentang">
+          <Tentang onKembali={() => setLayar('jadwal')} nav={setLayar} />
+        </Masuk>
+      )}
       {layar === 'profil' && (
-        <Profil
-          suaraCewe={suaraCewe}
-          gantiSuara={gantiSuara}
-          izinNotif={izinNotif}
-          onKembali={() => setLayar('jadwal')}
-          nav={setLayar}
-        />
+        <Masuk nama="profil">
+          <Profil
+            suaraCewe={suaraCewe}
+            gantiSuara={gantiSuara}
+            izinNotif={izinNotif}
+            onKembali={() => setLayar('jadwal')}
+            nav={setLayar}
+          />
+        </Masuk>
       )}
     </View>
   );
@@ -738,7 +781,7 @@ function Detail({
                 testID={'ingat-' + nama}
                 value={!!ingat[nama]}
                 onValueChange={() => toggleIngat(nama)}
-                trackColor={{ false: '#E5E7EB', true: RED }}
+                trackColor={{ false: LINE, true: RED }}
               />
             </View>
           );
@@ -898,7 +941,7 @@ function Profil({
             testID="pf-suara"
             value={suaraCewe}
             onValueChange={gantiSuara}
-            trackColor={{ false: '#E5E7EB', true: RED }}
+            trackColor={{ false: LINE, true: RED }}
           />
         </View>
         <Text style={s.seksiJudul}>Status Izin</Text>
@@ -921,6 +964,30 @@ function Profil({
       </ScrollView>
       <Navbawah aktif="Profil" nav={nav} />
     </View>
+  );
+}
+
+/** Kartu yang membesar halus saat disentuh, mengecil lagi saat dilepas. */
+function KartuSentuh({ onPress, style, children, testID }: {
+  onPress: () => void;
+  style: any;
+  children: React.ReactNode;
+  testID?: string;
+}) {
+  const sc = useRef(new Animated.Value(1)).current;
+  const gerak = (v: number) =>
+    Animated.spring(sc, { toValue: v, friction: 6, tension: 320, useNativeDriver: true }).start();
+  return (
+    <Animated.View style={[{ transform: [{ scale: sc }] }, { width: '100%' }]}>
+      <Pressable
+        testID={testID}
+        style={style}
+        onPress={onPress}
+        onPressIn={() => gerak(0.96)}
+        onPressOut={() => gerak(1)}>
+        {children}
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -975,7 +1042,7 @@ function Checklist({
         {JADWAL_DEFAULT.map((j) => {
           const on = !!centang[j.nama as NamaShalat];
           return (
-            <Pressable
+            <KartuSentuh
               key={j.nama}
               testID={'centang-' + j.nama}
               style={[s.cwKartu, on && s.cwKartuOn]}
@@ -984,7 +1051,7 @@ function Checklist({
                 <MaterialCommunityIcons
                   name={on ? 'check' : j.ikon}
                   size={20}
-                  color={on ? '#fff' : RED}
+                  color={on ? '#FFFFFF' : RED}
                 />
               </View>
               <View style={{ flex: 1 }}>
@@ -994,12 +1061,35 @@ function Checklist({
               <View style={[s.cwCentangBulir, on && s.cwCentangBulirOn]}>
                 {on && <MaterialCommunityIcons name="check" size={14} color="#fff" />}
               </View>
-            </Pressable>
+            </KartuSentuh>
           );
         })}
         <View style={{ height: 120 }} />
       </ScrollView>
       <Navbawah aktif="Centang" nav={nav} />
+    </View>
+  );
+}
+
+/** Tiang grafik yang tumbuh dari bawah saat layar dibuka. */
+function BarAnimasi({ tinggi, warna }: { tinggi: number; warna: any }) {
+  const h = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    h.setValue(0);
+    const t = setTimeout(() => {
+      Animated.timing(h, {
+        toValue: tinggi,
+        duration: 520,
+        delay: 120,
+        easing: Easing.bezier(0.22, 1, 0.36, 1),
+        useNativeDriver: false,
+      }).start();
+    }, 0);
+    return () => clearTimeout(t);
+  }, [h, tinggi]);
+  return (
+    <View style={s.grBarArea}>
+      <Animated.View style={[s.grBar, { height: h, backgroundColor: warna }]} />
     </View>
   );
 }
@@ -1035,17 +1125,10 @@ function Grafik({ stat, nav }: { stat: StatBulan | null; nav: (l: Layar) => void
           <View style={s.grBarsWrap}>
             {hari.map((h, i) => {
               const tinggi = Math.round((h.count / max) * 150);
+              const warna = h.count >= 5 ? RED : h.count >= 3 ? RED_LIGHT : '#D9C7B8';
               return (
                 <View key={h.tgl} style={s.grBarKolom}>
-                  <View style={s.grBarArea}>
-                    <View
-                      style={[
-                        s.grBar,
-                        { height: tinggi },
-                        h.count >= 5 ? s.grBarPenuh : h.count >= 3 ? s.grBarSedang : null,
-                      ]}
-                    />
-                  </View>
+                  <BarAnimasi tinggi={tinggi} warna={warna} />
                   <Text style={[s.grBarLabel, i % 3 === 0 ? s.grBarLabelTampil : null]}>
                     {h.label}
                   </Text>
@@ -1109,32 +1192,32 @@ function Navbawah({ aktif, nav }: { aktif: string; nav: (l: Layar) => void }) {
 }
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: BG },
-  page: { flex: 1, backgroundColor: BG },
-  splash: { flex: 1, backgroundColor: '#1A0606' },
+  root: { flex: 1, backgroundColor: '#FFFFFF' },
+  page: { flex: 1, backgroundColor: '#FFFFFF' },
+  splash: { flex: 1, backgroundColor: '#1F0B08' },
   logoRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 8, marginTop: 60,
   },
-  logoNama: { color: '#fff', fontSize: 20, fontWeight: '800' },
+  logoNama: { color: '#FFFFFF', fontSize: 20, fontWeight: '800' },
   logoSub: { color: 'rgba(255,255,255,0.7)', fontSize: 10, letterSpacing: 4 },
   jantungWrap: { alignItems: 'center', marginTop: 30 },
   ecgRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 6 },
   ecgGaris: { width: 90, height: 2, backgroundColor: 'rgba(255,255,255,0.5)' },
   splashBawah: { paddingHorizontal: 26, marginTop: 40 },
-  splashJudul: { color: '#fff', fontSize: 34, fontWeight: '800', lineHeight: 40 },
-  splashCare: { color: '#E53232' },
-  splashSub: { color: '#CFCFCF', fontSize: 13, lineHeight: 19, marginTop: 10 },
+  splashJudul: { color: '#FFFFFF', fontSize: 34, fontWeight: '800', lineHeight: 40 },
+  splashCare: { color: RED_LIGHT },
+  splashSub: { color: '#B8A79D', fontSize: 13, lineHeight: 19, marginTop: 10 },
   splashTombolRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 26,
   },
   tombolMulai: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#2B1212',
+    flexDirection: 'row', alignItems: 'center', backgroundColor: DARK,
     borderRadius: 28, paddingVertical: 16, paddingHorizontal: 34, gap: 10,
   },
-  tombolMulaiTeks: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  tombolMulaiTeks: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
   lingkaranHati: {
-    width: 64, height: 64, borderRadius: 32, backgroundColor: '#fff',
+    width: 64, height: 64, borderRadius: 32, backgroundColor: '#FFFFFF',
     alignItems: 'center', justifyContent: 'center',
   },
   bookHeader: {
@@ -1148,8 +1231,8 @@ const s = StyleSheet.create({
   salamKecil: { color: MUT, fontSize: 12 },
   salamNama: { color: INK, fontSize: 17, fontWeight: '700' },
   bellWrap: {
-    width: 44, height: 44, borderRadius: 22, backgroundColor: '#fff',
-    alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#F0E0DE',
+    width: 44, height: 44, borderRadius: 22, backgroundColor: '#FFFFFF',
+    alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: LINE,
   },
   bellDot: {
     position: 'absolute', top: 10, right: 11, width: 9, height: 9,
@@ -1160,21 +1243,21 @@ const s = StyleSheet.create({
   filterRow: { flexDirection: 'row', marginTop: 14, paddingHorizontal: 20, gap: 8 },
   chip: {
     backgroundColor: CREAM, borderRadius: 20, paddingVertical: 9,
-    paddingHorizontal: 15, borderWidth: 1, borderColor: '#F0E0DE',
+    paddingHorizontal: 15, borderWidth: 1, borderColor: LINE,
   },
   chipAktif: { backgroundColor: DARK, borderColor: DARK },
   chipTeks: { color: '#7A7A7A', fontSize: 12, fontWeight: '600' },
-  chipTeksAktif: { color: '#fff' },
+  chipTeksAktif: { color: '#FFFFFF' },
   list: { flex: 1, marginTop: 14, paddingHorizontal: 20 },
   kartuMerah: { backgroundColor: RED, borderRadius: 22, padding: 16, marginBottom: 14 },
   kmAtas: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   kmIkon: {
-    width: 44, height: 44, borderRadius: 22, backgroundColor: '#fff',
+    width: 44, height: 44, borderRadius: 22, backgroundColor: '#FFFFFF',
     alignItems: 'center', justifyContent: 'center',
   },
-  kmJudul: { color: '#fff', fontSize: 15, fontWeight: '700', lineHeight: 19 },
+  kmJudul: { color: '#FFFFFF', fontSize: 15, fontWeight: '700', lineHeight: 19 },
   kmPill: { backgroundColor: 'rgba(255,255,255,0.25)', borderRadius: 14, paddingVertical: 6, paddingHorizontal: 10 },
-  kmPillTeks: { color: '#fff', fontSize: 10, fontWeight: '700' },
+  kmPillTeks: { color: '#FFFFFF', fontSize: 10, fontWeight: '700' },
   kmTengah: { flexDirection: 'row', alignItems: 'center', marginTop: 14, gap: 10 },
   avatarTumpuk: { flexDirection: 'row', alignItems: 'center' },
   miniAvatar: {
@@ -1185,19 +1268,19 @@ const s = StyleSheet.create({
     width: 28, height: 28, borderRadius: 14, backgroundColor: DARK,
     alignItems: 'center', justifyContent: 'center', marginLeft: -10,
   },
-  miniPlusTeks: { color: '#fff', fontSize: 10, fontWeight: '700' },
+  miniPlusTeks: { color: '#FFFFFF', fontSize: 10, fontWeight: '700' },
   kmAvail: { color: 'rgba(255,255,255,0.9)', fontSize: 12 },
   kmBawah: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12,
   },
-  kmDokter: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  kmDokter: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
   kmSpesialis: { color: 'rgba(255,255,255,0.8)', fontSize: 12, marginTop: 2 },
   kmPanah: {
-    width: 42, height: 42, borderRadius: 21, backgroundColor: '#fff',
+    width: 42, height: 42, borderRadius: 21, backgroundColor: '#FFFFFF',
     alignItems: 'center', justifyContent: 'center',
   },
   kartuPutih: {
-    backgroundColor: '#fff', borderRadius: 22, padding: 16, marginBottom: 14,
+    backgroundColor: '#FFFFFF', borderRadius: 22, padding: 16, marginBottom: 14,
     shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 10, elevation: 3,
   },
   kpAtas: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -1217,68 +1300,68 @@ const s = StyleSheet.create({
     width: 44, height: 44, borderRadius: 22, backgroundColor: RED,
     alignItems: 'center', justifyContent: 'center',
   },
-  navTeks: { fontSize: 10, color: '#A88F8F', marginTop: 3 },
-  navTeksAktif: { color: '#fff', fontWeight: '700' },
+  navTeks: { fontSize: 10, color: MUT, marginTop: 3 },
+  navTeksAktif: { color: '#FFFFFF', fontWeight: '700' },
   detailScroll: { flex: 1, paddingHorizontal: 20 },
   detailTopbar: {
     flexDirection: 'row', justifyContent: 'space-between',
     marginTop: 54, marginBottom: 12,
   },
   btnLingkaran: {
-    width: 44, height: 44, borderRadius: 22, backgroundColor: '#fff',
-    alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#F0E0DE',
+    width: 44, height: 44, borderRadius: 22, backgroundColor: '#FFFFFF',
+    alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: LINE,
   },
-  detailTgl: { color: '#9CA3AF', fontSize: 12 },
+  detailTgl: { color: MUT, fontSize: 12 },
   detailJudul: { color: INK, fontSize: 28, fontWeight: '800', lineHeight: 34, marginTop: 4 },
-  detailLabel: { color: '#9CA3AF', fontSize: 11, marginTop: 10 },
+  detailLabel: { color: MUT, fontSize: 11, marginTop: 10 },
   detailId: { color: INK, fontSize: 16, fontWeight: '800', marginTop: 2 },
   fotoDokter: {
     width: 110, height: 110, borderRadius: 55, backgroundColor: RED,
     alignItems: 'center', justifyContent: 'center', alignSelf: 'flex-end', marginTop: -90,
   },
   kartuStatus: {
-    backgroundColor: '#fff', borderRadius: 18, padding: 16, marginTop: 14,
-    borderWidth: 1, borderColor: '#F0E0DE',
+    backgroundColor: '#FFFFFF', borderRadius: 18, padding: 16, marginTop: 14,
+    borderWidth: 1, borderColor: LINE,
   },
   statusAtas: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   statusJudul: { color: INK, fontSize: 14, fontWeight: '700', flex: 1 },
   pillConfirmed: { backgroundColor: RED, borderRadius: 12, paddingVertical: 5, paddingHorizontal: 12 },
-  pillConfirmedTeks: { color: '#fff', fontSize: 11, fontWeight: '700' },
+  pillConfirmedTeks: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
   timeline: { flexDirection: 'row', alignItems: 'center', marginTop: 14 },
   tlKiri: { alignItems: 'flex-start' },
   tlKanan: { alignItems: 'flex-end' },
   tlTgl: { color: MUT, fontSize: 10 },
   tlJam: { color: INK, fontSize: 13, fontWeight: '700', marginVertical: 2 },
-  tlDot: { width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: '#D1D5DB', marginTop: 4 },
-  tlGaris: { flex: 1, height: 0, borderTopWidth: 1.5, borderStyle: 'dashed', borderColor: '#E5E7EB' },
+  tlDot: { width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: '#D8CCBF', marginTop: 4 },
+  tlGaris: { flex: 1, height: 0, borderTopWidth: 1.5, borderStyle: 'dashed', borderColor: LINE },
   tlHati: {
     width: 36, height: 36, borderRadius: 18, backgroundColor: RED,
     alignItems: 'center', justifyContent: 'center', marginHorizontal: 6,
   },
   kartuVisit: { backgroundColor: RED, borderRadius: 22, padding: 16, marginTop: 14 },
   visitHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  visitJudul: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  visitJudul: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
   visitAksi: { flexDirection: 'row', gap: 8 },
   visitBtnKecil: {
-    width: 30, height: 30, borderRadius: 15, backgroundColor: '#fff',
+    width: 30, height: 30, borderRadius: 15, backgroundColor: '#FFFFFF',
     alignItems: 'center', justifyContent: 'center',
   },
   visitRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
   visitInner: { flex: 1, backgroundColor: RED_LIGHT, borderRadius: 16, padding: 14 },
-  visitInnerAktif: { borderWidth: 2, borderColor: '#fff' },
-  visitTipe: { color: '#fff', fontSize: 14, fontWeight: '700', lineHeight: 18 },
-  visitDur: { color: '#F5C6C6', fontSize: 11, marginTop: 10 },
-  visitMenit: { color: '#fff', fontSize: 20, fontWeight: '800', marginTop: 2 },
+  visitInnerAktif: { borderWidth: 2, borderColor: '#FFFFFF' },
+  visitTipe: { color: '#FFFFFF', fontSize: 14, fontWeight: '700', lineHeight: 18 },
+  visitDur: { color: '#E4C4B8', fontSize: 11, marginTop: 10 },
+  visitMenit: { color: '#FFFFFF', fontSize: 20, fontWeight: '800', marginTop: 2 },
   visitPanah: {
-    width: 34, height: 34, borderRadius: 17, backgroundColor: '#fff',
+    width: 34, height: 34, borderRadius: 17, backgroundColor: '#FFFFFF',
     alignItems: 'center', justifyContent: 'center', marginTop: 10,
   },
   seksiJudul: { color: INK, fontSize: 17, fontWeight: '800', marginTop: 18, marginBottom: 6 },
   seksiSub: { color: MUT, fontSize: 12, marginBottom: 10 },
   expectBaris: {
-    backgroundColor: '#fff', borderRadius: 16, padding: 12, marginBottom: 8,
+    backgroundColor: '#FFFFFF', borderRadius: 16, padding: 12, marginBottom: 8,
     flexDirection: 'row', alignItems: 'center', gap: 10,
-    borderWidth: 1, borderColor: '#F0E0DE',
+    borderWidth: 1, borderColor: LINE,
   },
   expectIkon: {
     width: 48, height: 48, borderRadius: 24, backgroundColor: PINK_BG,
@@ -1288,7 +1371,7 @@ const s = StyleSheet.create({
   expectB: { color: MUT, fontSize: 12 },
   inputJam: {
     color: INK, fontSize: 15, fontWeight: '700', borderWidth: 1,
-    borderColor: '#F0E0DE', borderRadius: 10, paddingVertical: 4,
+    borderColor: LINE, borderRadius: 10, paddingVertical: 4,
     paddingHorizontal: 10, marginTop: 4, width: 92,
   },
   btnTesKecil: {
@@ -1308,7 +1391,7 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', backgroundColor: RED,
     borderRadius: 20, paddingVertical: 10, paddingHorizontal: 14, gap: 6,
   },
-  bannerBtnTeks: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  bannerBtnTeks: { color: '#FFFFFF', fontSize: 12, fontWeight: '700' },
   paragraf: { color: '#555', fontSize: 13, lineHeight: 20, marginTop: 8 },
   langkahNomor: {
     width: 32, height: 32, borderRadius: 16, backgroundColor: PINK_BG,
@@ -1316,9 +1399,9 @@ const s = StyleSheet.create({
   },
   langkahTeks: { color: RED, fontSize: 14, fontWeight: '800' },
   profilKartu: {
-    backgroundColor: '#fff', borderRadius: 18, padding: 16, marginTop: 14,
+    backgroundColor: '#FFFFFF', borderRadius: 18, padding: 16, marginTop: 14,
     flexDirection: 'row', alignItems: 'center', gap: 14,
-    borderWidth: 1, borderColor: '#F0E0DE',
+    borderWidth: 1, borderColor: LINE,
   },
   profilAvatar: {
     width: 64, height: 64, borderRadius: 32, backgroundColor: RED,
@@ -1349,12 +1432,12 @@ const s = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 6,
     backgroundColor: DARK, borderRadius: 16, paddingVertical: 9, paddingHorizontal: 14,
   },
-  cwGrafikPillTeks: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  cwGrafikPillTeks: { color: '#FFFFFF', fontSize: 12, fontWeight: '700' },
   cwList: { flex: 1, marginTop: 14, paddingHorizontal: 20 },
   cwKartu: {
-    backgroundColor: '#fff', borderRadius: 20, padding: 14, marginBottom: 10,
+    backgroundColor: '#FFFFFF', borderRadius: 20, padding: 14, marginBottom: 10,
     flexDirection: 'row', alignItems: 'center', gap: 12,
-    borderWidth: 1, borderColor: '#F0E0DE',
+    borderWidth: 1, borderColor: LINE,
     shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
   },
   cwKartuOn: { backgroundColor: RED, borderColor: RED },
@@ -1364,14 +1447,14 @@ const s = StyleSheet.create({
   },
   cwIkonWrapOn: { backgroundColor: 'rgba(255,255,255,0.25)' },
   cwNama: { color: INK, fontSize: 16, fontWeight: '800' },
-  cwNamaOn: { color: '#fff' },
+  cwNamaOn: { color: '#FFFFFF' },
   cwJam: { color: MUT, fontSize: 11, marginTop: 1 },
   cwCentangBulir: {
     width: 26, height: 26, borderRadius: 13,
-    borderWidth: 2, borderColor: '#D1D5DB',
+    borderWidth: 2, borderColor: '#D8CCBF',
     alignItems: 'center', justifyContent: 'center',
   },
-  cwCentangBulirOn: { backgroundColor: '#fff', borderColor: '#fff' },
+  cwCentangBulirOn: { backgroundColor: '#FFFFFF', borderColor: '#FFFFFF' },
   /* ---- grafik bulanan ---- */
   grHeader: { paddingTop: 54, paddingHorizontal: 20 },
   grJudul: { color: INK, fontSize: 30, fontWeight: '800', lineHeight: 36 },
@@ -1382,7 +1465,7 @@ const s = StyleSheet.create({
   },
   grStatKartu: {
     flex: 1, backgroundColor: CREAM, borderRadius: 18, padding: 14,
-    alignItems: 'center', borderWidth: 1, borderColor: '#F0E0DE',
+    alignItems: 'center', borderWidth: 1, borderColor: LINE,
   },
   grStatAngka: { color: RED, fontSize: 22, fontWeight: '800' },
   grStatLabel: { color: MUT, fontSize: 11, marginTop: 2 },
@@ -1400,7 +1483,7 @@ const s = StyleSheet.create({
     backgroundColor: PINK_BG, borderRadius: 6,
   },
   grBar: {
-    width: '100%', borderRadius: 6, backgroundColor: '#E9C9C9',
+    width: '100%', borderRadius: 6, backgroundColor: '#D9C7B8',
   },
   grBarSedang: { backgroundColor: RED_LIGHT },
   grBarPenuh: { backgroundColor: RED },
@@ -1408,8 +1491,8 @@ const s = StyleSheet.create({
   grBarLabelTampil: { color: MUT, fontWeight: '700' },
   grRingkasan: {
     flexDirection: 'row', alignItems: 'flex-start', gap: 10,
-    backgroundColor: '#fff', borderRadius: 18, margin: 20, marginTop: 18,
-    padding: 14, borderWidth: 1, borderColor: '#F0E0DE',
+    backgroundColor: '#FFFFFF', borderRadius: 18, margin: 20, marginTop: 18,
+    padding: 14, borderWidth: 1, borderColor: LINE,
   },
   grRingkasanTeks: { flex: 1, color: '#555', fontSize: 13, lineHeight: 19 },
   grLoading: { color: MUT, fontSize: 14 },
