@@ -6,6 +6,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAudioPlayer } from 'expo-audio';
 import Notifications from './src/notif';
 import * as SplashScreen from './src/splashscreen';
+import {
+  SHALAT_LIST,
+  getBulanBerjalan,
+  getHari,
+  hariKosong,
+  tandaiSudah,
+  toggleHari,
+  tanggalKey,
+} from './src/checklist';
+import type { NamaShalat, StatBulan } from './src/checklist';
 
 // Tahan splash native sampai React siap, biar tidak ada kedipan.
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -19,7 +29,7 @@ const MUT = '#8A8A8A';
 const CREAM = '#FFF5F3';
 const PINK_BG = '#FFF1F1';
 
-type Layar = 'splash' | 'jadwal' | 'semua' | 'detail' | 'tentang' | 'profil';
+type Layar = 'splash' | 'jadwal' | 'semua' | 'detail' | 'tentang' | 'profil' | 'checklist' | 'grafik';
 
 const JADWAL_DEFAULT = [
   { nama: 'Subuh', jam: '04:08', ikon: 'weather-night', sound: 'suara_subuh' },
@@ -51,6 +61,12 @@ function jamKeMenit(jam: string): number | null {
 /** Satu channel notifikasi per waktu shalat (suara dikunci di level channel). */
 const CHANNEL = (nama: string) => 'azan-' + nama.toLowerCase();
 
+/** Kategori notifikasi susulan "Sudah shalat?" dengan tombol Sudah/Belum. */
+const KAT_TANYA = 'tanyashalat';
+
+/** Jeda antara adzan dan notifikasi susulan tanya-jawab (menit). */
+const TANYA_SETELAH_MENIT = 30;
+
 export default function App() {
   const [layar, setLayar] = useState<Layar>('splash');
   const [filter, setFilter] = useState('Semua');
@@ -62,6 +78,24 @@ export default function App() {
   const [lagiPutar, setLagiPutar] = useState<string | null>(null);
   const [izinNotif, setIzinNotif] = useState(false);
   const [sedangJadwal, setSedangJadwal] = useState(false);
+  const [centang, setCentang] = useState<Record<NamaShalat, boolean>>(() => hariKosong());
+  const [statBulan, setStatBulan] = useState<StatBulan | null>(null);
+
+  /* ---- muat centang hari ini + statistik bulan ---- */
+  const segarkanChecklist = async () => {
+    const h = await getHari(tanggalKey());
+    setCentang(h);
+    setStatBulan(await getBulanBerjalan());
+  };
+  useEffect(() => {
+    segarkanChecklist();
+  }, []);
+
+  const sentuhHari = async (nama: NamaShalat) => {
+    const h = await toggleHari(tanggalKey(), nama);
+    setCentang(h);
+    setStatBulan(await getBulanBerjalan());
+  };
 
   const player = useAudioPlayer(AUDIO.Subuh);
 
@@ -118,10 +152,71 @@ export default function App() {
             /* satu channel gagal jangan sampai memblokir sisanya */
           }
         }
+        // Kategori tanya-jawab: tombol Sudah/Belum di notifikasi susulan.
+        try {
+          await Notifications.setNotificationCategoryAsync(KAT_TANYA, [
+            {
+              identifier: 'SUDAH',
+              buttonTitle: 'Sudah',
+              options: { isDestructive: false, opensAppToForeground: true },
+            },
+            {
+              identifier: 'BELUM',
+              buttonTitle: 'Belum',
+              options: { isDestructive: false, opensAppToForeground: true },
+            },
+          ]);
+        } catch {
+          /* kategori gagal tidak memblokir alarm utama */
+        }
       } catch {
         setIzinNotif(false);
       }
     })();
+  }, []);
+
+  /* ---- jawaban notifikasi tanya-jawab: Sudah -> centang, Belum -> tunda 15 menit ---- */
+  const sesiSudah = useRef(false);
+  useEffect(() => {
+    const prosesTanya = async (resp: { actionIdentifier: string; data?: Record<string, unknown> }) => {
+      const nama = String(resp.data?.nama ?? '');
+      if (!nama || !SHALAT_LIST.includes(nama as NamaShalat)) return;
+      if (resp.actionIdentifier === 'SUDAH') {
+        const h = await tandaiSudah(tanggalKey(), nama);
+        setCentang(h);
+        setStatBulan(await getBulanBerjalan());
+      } else if (resp.actionIdentifier === 'BELUM') {
+        try {
+          await Notifications.scheduleNotificationAsync({
+            identifier: 'tanya-' + nama,
+            content: {
+              title: 'Waktunya ' + nama,
+              body: 'Sudah masuk waktu ' + nama + '. Yuk shalat.',
+              categoryIdentifier: KAT_TANYA,
+              data: { nama },
+            },
+            trigger: {
+              type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+              seconds: 15 * 60,
+              channelId: CHANNEL(nama),
+            },
+          });
+        } catch { /* di web ini stub */ }
+      }
+    };
+    const sub = Notifications.addNotificationResponseReceivedListener(async (resp) => {
+      await prosesTanya(resp);
+    });
+    // Jika app ditutup lalu user tap aksi, notifikasi hanya dibaca saat app dibuka.
+    (async () => {
+      if (sesiSudah.current) return;
+      sesiSudah.current = true;
+      try {
+        const last = await Notifications.getLastNotificationResponseAsync();
+        if (last) await prosesTanya(last);
+      } catch { /* abaikan */ }
+    })();
+    return () => sub.remove();
   }, []);
 
   /* ---- state tersimpan ---- */
@@ -177,6 +272,23 @@ export default function App() {
               type: Notifications.SchedulableTriggerInputTypes.DAILY,
               hour: Math.floor(menit / 60),
               minute: menit % 60,
+              channelId: CHANNEL(item.nama),
+            },
+          });
+          // Tanya susulan 30 menit setelah adzan, dengan tombol Sudah/Belum.
+          const menitTanya = (menit + TANYA_SETELAH_MENIT) % 1440;
+          await Notifications.scheduleNotificationAsync({
+            identifier: 'tanya-harian-' + item.nama,
+            content: {
+              title: 'Sudah shalat ' + item.nama + '?',
+              body: 'Centang kalau sudah, biar Ajan hitung ibadahnya.',
+              categoryIdentifier: KAT_TANYA,
+              data: { nama: item.nama },
+            },
+            trigger: {
+              type: Notifications.SchedulableTriggerInputTypes.DAILY,
+              hour: Math.floor(menitTanya / 60),
+              minute: menitTanya % 60,
               channelId: CHANNEL(item.nama),
             },
           });
@@ -247,6 +359,17 @@ export default function App() {
           onKembali={() => setLayar('jadwal')}
           nav={setLayar}
         />
+      )}
+      {layar === 'checklist' && (
+        <Checklist
+          centang={centang}
+          onSentuh={sentuhHari}
+          segarkan={segarkanChecklist}
+          nav={setLayar}
+        />
+      )}
+      {layar === 'grafik' && (
+        <Grafik stat={statBulan} nav={setLayar} />
       )}
       {layar === 'tentang' && <Tentang onKembali={() => setLayar('jadwal')} nav={setLayar} />}
       {layar === 'profil' && (
@@ -801,11 +924,161 @@ function Profil({
   );
 }
 
+/* ---------- LAYAR: CHECKLIST HARIAN ---------- */
+function Checklist({
+  centang,
+  onSentuh,
+  segarkan,
+  nav,
+}: {
+  centang: Record<NamaShalat, boolean>;
+  onSentuh: (n: NamaShalat) => void;
+  segarkan: () => void;
+  nav: (l: Layar) => void;
+}) {
+  const sudah = SHALAT_LIST.filter((n) => centang[n]).length;
+  const tanggalSekarang = new Date();
+  const labelHari = tanggalSekarang.toLocaleDateString('id-ID', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  });
+  return (
+    <View style={s.page}>
+      <View style={s.cwHeader}>
+        <View>
+          <Text style={s.cwLabel}>Hari ini</Text>
+          <Text style={s.cwTanggal}>{labelHari}</Text>
+        </View>
+        <Pressable
+          style={s.cwHitungWrap}
+          onPress={segarkan}
+          testID="cw-refresh">
+          <MaterialCommunityIcons
+            name={sudah >= 5 ? 'trophy' : 'check-circle'}
+            size={26}
+            color={sudah >= 5 ? '#D4A017' : RED}
+          />
+        </Pressable>
+      </View>
+      <View style={s.cwProgressRow}>
+        <View style={s.cwProgressLabel}>
+          <Text style={s.cwProgressTeks}>{sudah} dari 5</Text>
+          <Text style={s.cwProgressSub}>
+            {sudah >= 5 ? 'Semua berjaya. Barakallahu fiik' : 'Lanjutkan'}
+          </Text>
+        </View>
+        <Pressable style={s.cwGrafikPill} onPress={() => nav('grafik')} testID="cw-buka-grafik">
+          <Text style={s.cwGrafikPillTeks}>Grafik</Text>
+          <MaterialCommunityIcons name="chart-bar" size={14} color={DARK} />
+        </Pressable>
+      </View>
+      <ScrollView style={s.cwList} showsVerticalScrollIndicator={false}>
+        {JADWAL_DEFAULT.map((j) => {
+          const on = !!centang[j.nama as NamaShalat];
+          return (
+            <Pressable
+              key={j.nama}
+              testID={'centang-' + j.nama}
+              style={[s.cwKartu, on && s.cwKartuOn]}
+              onPress={() => onSentuh(j.nama as NamaShalat)}>
+              <View style={[s.cwIkonWrap, on && s.cwIkonWrapOn]}>
+                <MaterialCommunityIcons
+                  name={on ? 'check' : j.ikon}
+                  size={20}
+                  color={on ? '#fff' : RED}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.cwNama, on && s.cwNamaOn]}>{j.nama}</Text>
+                <Text style={s.cwJam}>{j.jam} WIB</Text>
+              </View>
+              <View style={[s.cwCentangBulir, on && s.cwCentangBulirOn]}>
+                {on && <MaterialCommunityIcons name="check" size={14} color="#fff" />}
+              </View>
+            </Pressable>
+          );
+        })}
+        <View style={{ height: 120 }} />
+      </ScrollView>
+      <Navbawah aktif="Centang" nav={nav} />
+    </View>
+  );
+}
+
+/* ---------- LAYAR: GRAFIK BULANAN ---------- */
+function Grafik({ stat, nav }: { stat: StatBulan | null; nav: (l: Layar) => void }) {
+  const bulanLabel = new Date().toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+  const hari = stat?.hari ?? [];
+  const max = 5;
+  return (
+    <View style={s.page}>
+      <View style={s.grHeader}>
+        <Text style={s.grJudul}>Pencapaian{'\n'}<Text style={s.grJudulMerah}>Bulanan</Text></Text>
+        <Text style={s.grSub}>{bulanLabel}</Text>
+      </View>
+      {stat ? (
+        <>
+          <View style={s.grStatRow}>
+            <View style={s.grStatKartu}>
+              <Text style={s.grStatAngka}>{stat.total}</Text>
+              <Text style={s.grStatLabel}>Shalat</Text>
+            </View>
+            <View style={s.grStatKartu}>
+              <Text style={s.grStatAngka}>{stat.persen}%</Text>
+              <Text style={s.grStatLabel}>Tingkat</Text>
+            </View>
+            <View style={s.grStatKartu}>
+              <Text style={s.grStatAngka}>{stat.streak}</Text>
+              <Text style={s.grStatLabel}>Hari beruntun</Text>
+            </View>
+          </View>
+          <Text style={s.grGrafikLabel}>Per hari</Text>
+          <View style={s.grBarsWrap}>
+            {hari.map((h, i) => {
+              const tinggi = Math.round((h.count / max) * 150);
+              return (
+                <View key={h.tgl} style={s.grBarKolom}>
+                  <View style={s.grBarArea}>
+                    <View
+                      style={[
+                        s.grBar,
+                        { height: tinggi },
+                        h.count >= 5 ? s.grBarPenuh : h.count >= 3 ? s.grBarSedang : null,
+                      ]}
+                    />
+                  </View>
+                  <Text style={[s.grBarLabel, i % 3 === 0 ? s.grBarLabelTampil : null]}>
+                    {h.label}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+          <View style={s.grRingkasan}>
+            <MaterialCommunityIcons name="clipboard-check-outline" size={18} color={RED} />
+            <Text style={s.grRingkasanTeks}>
+              {stat.total} dari {stat.mungkin} shalat ({Math.round(
+                (stat.total / Math.max(stat.mungkin, 1)) * 100
+              )}%). Pantau terus grafiknya biar ibadah makin teratur.
+            </Text>
+          </View>
+        </>
+      ) : (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={s.grLoading}>Memuat grafik...</Text>
+        </View>
+      )}
+      <View style={{ height: 100 }} />
+      <Navbawah aktif="Grafik" nav={nav} />
+    </View>
+  );
+}
+
 function Navbawah({ aktif, nav }: { aktif: string; nav: (l: Layar) => void }) {
-  const items: { nama: string; ikon: 'home' | 'calendar-check-outline' | 'information-outline' | 'account-outline'; tujuan: Layar }[] = [
+  const items: { nama: string; ikon: 'home' | 'calendar-check-outline' | 'checkbox-marked' | 'chart-bar' | 'account-outline'; tujuan: Layar }[] = [
     { nama: 'Home', ikon: 'home', tujuan: 'jadwal' },
     { nama: 'Jadwal', ikon: 'calendar-check-outline', tujuan: 'semua' },
-    { nama: 'Tentang', ikon: 'information-outline', tujuan: 'tentang' },
+    { nama: 'Centang', ikon: 'checkbox-marked', tujuan: 'checklist' },
+    { nama: 'Grafik', ikon: 'chart-bar', tujuan: 'grafik' },
     { nama: 'Profil', ikon: 'account-outline', tujuan: 'profil' },
   ];
   return (
@@ -1054,4 +1327,90 @@ const s = StyleSheet.create({
   profilNama: { color: INK, fontSize: 18, fontWeight: '800' },
   profilKota: { color: MUT, fontSize: 13, marginTop: 2 },
   smJam: { color: RED, fontSize: 15, fontWeight: '800', marginRight: 4 },
+  /* ---- checklist harian ---- */
+  cwHeader: {
+    flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between',
+    paddingTop: 54, paddingHorizontal: 20,
+  },
+  cwLabel: { color: MUT, fontSize: 12 },
+  cwTanggal: { color: INK, fontSize: 17, fontWeight: '800', marginTop: 2 },
+  cwHitungWrap: {
+    width: 48, height: 48, borderRadius: 24, backgroundColor: PINK_BG,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  cwProgressRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, marginTop: 16,
+  },
+  cwProgressLabel: { flex: 1 },
+  cwProgressTeks: { color: INK, fontSize: 15, fontWeight: '800' },
+  cwProgressSub: { color: MUT, fontSize: 12, marginTop: 2 },
+  cwGrafikPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: DARK, borderRadius: 16, paddingVertical: 9, paddingHorizontal: 14,
+  },
+  cwGrafikPillTeks: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  cwList: { flex: 1, marginTop: 14, paddingHorizontal: 20 },
+  cwKartu: {
+    backgroundColor: '#fff', borderRadius: 20, padding: 14, marginBottom: 10,
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    borderWidth: 1, borderColor: '#F0E0DE',
+    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
+  },
+  cwKartuOn: { backgroundColor: RED, borderColor: RED },
+  cwIkonWrap: {
+    width: 44, height: 44, borderRadius: 22, backgroundColor: PINK_BG,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  cwIkonWrapOn: { backgroundColor: 'rgba(255,255,255,0.25)' },
+  cwNama: { color: INK, fontSize: 16, fontWeight: '800' },
+  cwNamaOn: { color: '#fff' },
+  cwJam: { color: MUT, fontSize: 11, marginTop: 1 },
+  cwCentangBulir: {
+    width: 26, height: 26, borderRadius: 13,
+    borderWidth: 2, borderColor: '#D1D5DB',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  cwCentangBulirOn: { backgroundColor: '#fff', borderColor: '#fff' },
+  /* ---- grafik bulanan ---- */
+  grHeader: { paddingTop: 54, paddingHorizontal: 20 },
+  grJudul: { color: INK, fontSize: 30, fontWeight: '800', lineHeight: 36 },
+  grJudulMerah: { color: RED },
+  grSub: { color: MUT, fontSize: 13, marginTop: 4 },
+  grStatRow: {
+    flexDirection: 'row', gap: 10, paddingHorizontal: 20, marginTop: 18,
+  },
+  grStatKartu: {
+    flex: 1, backgroundColor: CREAM, borderRadius: 18, padding: 14,
+    alignItems: 'center', borderWidth: 1, borderColor: '#F0E0DE',
+  },
+  grStatAngka: { color: RED, fontSize: 22, fontWeight: '800' },
+  grStatLabel: { color: MUT, fontSize: 11, marginTop: 2 },
+  grGrafikLabel: {
+    color: INK, fontSize: 14, fontWeight: '800',
+    paddingHorizontal: 20, marginTop: 22,
+  },
+  grBarsWrap: {
+    flexDirection: 'row', alignItems: 'flex-end',
+    paddingHorizontal: 20, marginTop: 12, height: 190,
+  },
+  grBarKolom: { flex: 1, alignItems: 'center' },
+  grBarArea: {
+    flex: 1, width: '60%', justifyContent: 'flex-end',
+    backgroundColor: PINK_BG, borderRadius: 6,
+  },
+  grBar: {
+    width: '100%', borderRadius: 6, backgroundColor: '#E9C9C9',
+  },
+  grBarSedang: { backgroundColor: RED_LIGHT },
+  grBarPenuh: { backgroundColor: RED },
+  grBarLabel: { color: '#C9C9C9', fontSize: 9, marginTop: 4 },
+  grBarLabelTampil: { color: MUT, fontWeight: '700' },
+  grRingkasan: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 10,
+    backgroundColor: '#fff', borderRadius: 18, margin: 20, marginTop: 18,
+    padding: 14, borderWidth: 1, borderColor: '#F0E0DE',
+  },
+  grRingkasanTeks: { flex: 1, color: '#555', fontSize: 13, lineHeight: 19 },
+  grLoading: { color: MUT, fontSize: 14 },
 });

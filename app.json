@@ -1,23 +1,64 @@
 {
   "expo": {
-    "name": "Ajan",
-    "slug": "Ajan",
-    "version": "1.0.0",
-    "orientation": "portrait",
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#1A0606",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "package": "com.mada.ajan",
+      "permissions": [
+        "POST_NOTIFICATIONS",
+        "SCHEDULE_EXACT_ALARM",
+        "USE_EXACT_ALARM",
+        "VIBRATE",
+        "RECEIVE_BOOT_COMPLETED"
+      ],
+      "predictiveBackGestureEnabled": false,
+      "versionCode": 8
+    },
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
     "ios": {
       "supportsTablet": true
     },
-    "android": {
-      "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
-      },
-      "predictiveBackGestureEnabled": false
-    },
+    "name": "Ajan",
+    "orientation": "portrait",
+    "plugins": [
+      "expo-font",
+      [
+        "expo-audio",
+        {
+          "enableBackgroundPlayback": false
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "sounds": [
+            "./assets/suara_subuh.mp3",
+            "./assets/suara_dzuhur.mp3",
+            "./assets/suara_ashar.mp3",
+            "./assets/suara_maghrib.mp3",
+            "./assets/suara_isya.mp3"
+          ],
+          "color": "#B31217"
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#1A0606",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain"
+        }
+      ],
+      "expo-asset"
+    ],
+    "slug": "Ajan",
+    "userInterfaceStyle": "light",
+    "version": "1.1.0",
     "web": {
       "favicon": "./assets/favicon.png"
     }
